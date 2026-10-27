@@ -9,11 +9,11 @@ Use the Container framework preset. Clear previous Install Command, Build Comman
 and Output Directory overrides. Dockerfile installs the entire npm workspace and
 builds the website. Set PORT=3000 in Vercel so routing matches the container.
 
-Configure the four NEXT_PUBLIC_FIREBASE_* values for the production build as well
-as runtime. Dockerfile declares these as ARG and ENV because Next.js embeds public
-client configuration during next build. Verify the container build receives these
-arguments; runtime-only configuration cannot repair an already-built client bundle.
-Never pass Firebase administrator private keys as Docker build arguments.
+Configure all four NEXT_PUBLIC_FIREBASE_* variables in the Vercel production
+runtime environment. Login loads only these public web settings from the uncached
+/api/firebase-config endpoint, so container build arguments are optional. Admin
+credentials are never included in that response. Never pass Firebase administrator
+private keys as Docker build arguments.
 
 Runtime environment: DATA_MODE=firebase, FIREBASE_PROJECT_ID,
 FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY, LEADERSHIP_ALLOWED_EMAILS,
