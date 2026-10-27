@@ -6,3 +6,8 @@ node_modules
 .local
 .git
 **/*service-account*.json
+
+**/node_modules
+**/.next-dev
+**/*.tsbuildinfo
+.vercel
