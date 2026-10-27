@@ -1,0 +1,13 @@
+{
+  "name": "@allo/worker",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "once": "tsx src/index.ts --once",
+    "report": "tsx src/index.ts --report-only"
+  },
+  "dependencies": {
+    "@allo/core": "*"
+  }
+}

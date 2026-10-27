@@ -1,0 +1,1 @@
+import './globals.css';export const metadata={title:'Allo Ops — Operations workspace',description:'Recurring task tracking, employee accountability and operational escalation.'};export default function Layout({children}:{children:React.ReactNode}){return <html lang="en"><body>{children}</body></html>}

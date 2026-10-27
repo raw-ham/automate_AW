@@ -1,0 +1,8 @@
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+  // Browser data access goes through the verified Next.js session API.
+  // Admin SDK access bypasses these rules; server authorization is mandatory.
+  match /{document=**} { allow read, write: if false; }
+ }
+}

@@ -1,0 +1,2 @@
+import {redirect} from 'next/navigation';import {identity,profile} from '../../lib/server';import {ProfileForm} from '../../components/auth';
+export default async function Page({searchParams}:{searchParams:Promise<{role?:string}>}){const i=await identity();if(!i)redirect('/signup');const p=await profile();if(p)redirect(`/${p.role}/dashboard`);const q=await searchParams;return <ProfileForm email={i.email} name={i.name} initialRole={['employee','manager','leadership'].includes(q.role||'')?q.role!:'employee'}/>}

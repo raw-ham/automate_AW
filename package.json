@@ -1,0 +1,31 @@
+{
+  "name": "allo-operations",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "services/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @allo/web",
+    "worker": "npm run dev -w @allo/worker",
+    "worker:once": "npm run once -w @allo/worker",
+    "build": "npm run build -w @allo/web",
+    "typecheck": "tsc --noEmit && npm run typecheck -w @allo/web",
+    "test": "tsx --test tests/*.test.ts",
+    "check:config": "node scripts/check-config.mjs",
+    "verify:firebase": "node scripts/verify-firebase.mjs",
+    "worker:report": "npm run report -w @allo/worker"
+  },
+  "dependencies": {
+    "dotenv": "16.6.1",
+    "firebase-admin": "13.6.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.0",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3"
+  }
+}

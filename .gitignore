@@ -1,0 +1,12 @@
+node_modules/
+.next/
+.env
+.env.local
+.env.*.local
+.local/
+*.tsbuildinfo
+*.log
+**/next-env.d.ts
+**/*service-account*.json
+
+.next-dev/

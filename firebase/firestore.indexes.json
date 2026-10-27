@@ -1,0 +1,1 @@
+{"indexes":[{"collectionGroup":"taskCycles","queryScope":"COLLECTION","fields":[{"fieldPath":"status","order":"ASCENDING"},{"fieldPath":"managerAcknowledgedAt","order":"ASCENDING"}]}],"fieldOverrides":[]}

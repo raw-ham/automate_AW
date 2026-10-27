@@ -1,0 +1,2 @@
+import {redirect} from 'next/navigation';import {profile} from '../../lib/server';import {AuthScreen} from '../../components/auth';
+export default async function Page({searchParams}:{searchParams:Promise<{role?:string}>}){const p=await profile();if(p)redirect(`/${p.role}/dashboard`);const q=await searchParams;return <AuthScreen intent="signup" role={['leadership','manager','employee'].includes(q.role||'')?q.role!:'employee'}/>}
