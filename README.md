@@ -1,124 +1,271 @@
-# Allo Ops
+<div align="center">
+  <a href="https://alloinnoware.com/">
+    <img src="https://alloinnoware.com/cdn/shop/files/allo-logo_d87af41a-0c19-4c9b-b68a-b1ac0b8b4643.png?v=1780302795&amp;width=500" alt="Allo Innoware logo" width="230" />
+  </a>
+  <h1>Allo AI Operations Manager</h1>
+  <p><strong>Recurring task assignment · Employee accountability · Automated reporting</strong></p>
+  <p>One employee submission connects the website, independent automation server, and Google Sheets.</p>
+  <p>
+    <a href="https://automate-aw-five.vercel.app"><strong>🌐 Open the live platform</strong></a>
+    &nbsp; · &nbsp;
+    <a href="#-the-complete-pipeline">🔄 Explore the pipeline</a>
+    &nbsp; · &nbsp;
+    <a href="#-hr-demonstration-guide">🎬 HR demonstration</a>
+  </p>
+  <p><code>Next.js + TypeScript</code> &nbsp; <code>Firebase</code> &nbsp; <code>Node.js worker</code> &nbsp; <code>Apps Script + Gemini</code> &nbsp; <code>Google Sheets</code></p>
+</div>
 
-A workforce operations platform with a public landing page, Google login and signup, immutable role profiles, manager and employee dashboards, recurring task cycles, evidence submission, manager acknowledgement, independent escalation processing and reporting.
 
-## Project setup
 
-Requires Node 22 LTS or newer. Install with `npm install`. Configure the shared root `.env`; both servers load it. `.env.example` documents every variable. Do not put administrator credentials in NEXT_PUBLIC variables or commit secrets.
+## 🔄 The complete pipeline
 
-The production application defaults to `DATA_MODE=firebase`. Firebase configuration must be added before authenticated workflows can run. There is no automatic fake login. Local test data and the file adapter are available only when explicitly setting `DATA_MODE=local` outside production.
+This node diagram shows who performs each step and where the information moves. GitHub renders it directly in the README.
 
-1. Firebase Console: register a web application; add its public web values to NEXT_PUBLIC_FIREBASE_*.
-2. Enable Authentication → Google, select a support email, and authorize `localhost` and `127.0.0.1` for local testing.
-3. Create the default Firestore database in production mode. Deploy firebase/firestore.rules and firestore.indexes.json. Direct browser database access is denied; the API verifies sessions and authorizes each operation.
-4. Configure FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY in `.env`. Keep the private key's literal \n escapes, or quote a multiline value. Alternatively use GOOGLE_APPLICATION_CREDENTIALS pointing to a private service-account file. For hosted deployments prefer a managed runtime identity. Use separate service identities for web and worker, with Firestore data access and required Firebase Auth session permissions; avoid Owner/Editor credentials.
-5. Add approved leadership addresses to LEADERSHIP_ALLOWED_EMAILS. Configure notification recipients separately with LEADERSHIP_NOTIFY_EMAILS. The role card selected on the public website does not grant leadership access. Existing roles cannot be changed by registration requests.
-6. Set WORKER_API_TOKEN to a long random value. Set APP_BASE_URL and WORKER_URL to the correct environment addresses.
-7. Configure RESEND_API_KEY and a verified EMAIL_FROM address; set EMAIL_DRY_RUN=false only for intended delivery tests. Without delivery configuration no email is claimed as sent.
-8. Run `npm run dev` for Server 1 at http://127.0.0.1:3000, and `npm run worker` separately for Server 2 at http://127.0.0.1:3001. Server 2 scans every five minutes by default, even when no users are signed in. `npm run worker:once` executes one scheduled job.
+```mermaid
+flowchart TD
+    A[Employee or manager signs in with Google] --> B[Server 1 · Next.js website]
+    B --> C[Manager assigns employee and creates recurring task]
+    C --> D[(Firebase Firestore · source of truth)]
+    E[Employee submits ticket ID or completion note once] --> B
+    B --> D
+    D --> F[Server 2 · independent Node.js worker]
+    F --> G[Validate submitted evidence fields]
+    G --> H[Record completion and prepare recurring cycles]
+    F --> I[Detect overdue work and acknowledgement SLA]
+    I --> J[Prepare manager or leadership escalation events]
+    H --> D
+    J --> D
+    K[Manager reviews and acknowledges in website] --> B
+    F --> L[Authenticated JSON report API]
+    L --> M[Google Apps Script scheduled sync]
+    M --> N[Gemini structured change analysis]
+    N --> O[Validate plan and upsert rows by stable ID]
+    O --> P[Google Sheets · HR and leadership reporting]
+    F --> Q[Node.js report editor · notes and review tags]
+    Q --> D
+```
 
-`npm run check:config` lists missing settings without printing values. `npm run typecheck`, `npm test`, and `npm run build` validate the source. Tests use isolated temporary local databases and do not claim a Firebase, email or OAuth integration test.
+| Stage | What happens | Result for the business |
+| --- | --- | --- |
+| **1. Authenticate** | Firebase Google sign-in establishes identity; Server 1 verifies the token and issues an HTTP-only session cookie. New users complete a profile with a unique User ID. | Work is attributed to an authenticated person. |
+| **2. Assign** | A manager maps an employee by User ID and creates a task with a deadline, recurrence, priority and evidence requirement. | The employee sees an accountable assignment. |
+| **3. Perform and submit** | The employee completes the actual work and enters an external ticket ID, or a daily completion note and optional proof link. | One submission feeds the operational record. |
+| **4. Process** | Server 2 checks submitted fields on its independent scan loop, records the completion actor and timestamps, and updates reports. | The current occurrence has traceable completion evidence. |
+| **5. Repeat** | Recurrence logic creates deterministic future cycle IDs using the task’s original schedule and configured working-day rules. | Employees do not calculate the next deadline manually. |
+| **6. Monitor exceptions** | The worker detects missed deadlines and tracks manager acknowledgement separately from employee completion. | Managers can see unresolved work and review obligations. |
+| **7. Escalate** | The worker prepares manager and leadership events according to the configured SLA and records their delivery state. | Escalation history remains auditable; prepared mail is not labelled sent. |
+| **8. Synchronize** | Apps Script fetches the paginated Server 2 report; Gemini proposes structured analysis; trusted script code validates and updates matching sheet rows. | HR gets consolidated facts and AI-assisted remarks without duplicate data entry. |
 
-## Routes
+**Why two servers?** Server 1 responds to people using the website. Server 2 runs the automation independently, including when nobody is signed in. Both use the same Firebase project and shared domain rules. Apps Script has its own schedule, so a website update, worker scan and spreadsheet refresh can occur at different times.
 
-Public: `/`, `/login`, `/signup`, `/complete-profile`.
+## 🖼️ A walkthrough of the running platform
 
-Manager: `/manager/dashboard`, `/manager/tasks`, `/manager/employees`, `/manager/reports`, `/manager/escalations`, `/manager/history`, `/manager/action/[escalationId]`.
+### Employee overview
 
-Employee: `/employee/dashboard`, `/employee/tasks`, `/employee/tasks/[cycleId]`, `/employee/history`, `/employee/reports`.
+The overview brings active, completed, overdue and awaiting-review counts into one workspace. In this capture there are three active cycles and one completed cycle.
 
-Leadership: `/leadership/dashboard`, `/leadership/tasks`, `/leadership/employees`, `/leadership/escalations`, `/leadership/reports`, `/leadership/history`, `/leadership/settings`.
+![Employee overview with task counts and workflow summary](repo-media/Screenshot%202026-10-28%20at%202.34.56%E2%80%AFPM.png)
 
-Authentication uses Google ID tokens exchanged for HTTP-only Firebase session cookies. Server-rendered route guards and API checks verify the trusted profile. New profiles reserve custom IDs transactionally. The server verifies recent Google authentication and verified email; leadership requires the configured allowlist. Manager assignment and employee completion checks are repeated inside database transactions.
+*The captured “Worker offline” badge reflects the health check at screenshot time. It is not a statement about the worker’s present deployment status.*
 
-## Architecture and workflow
+### Submit completion from one place
 
-Server 1 is Next.js. It owns authentication, assignment, task creation, completion submissions and explicit manager acknowledgement. It never runs scheduled scans. Server 2 is a standalone Node process exposing health and token-protected scan controls; it owns verification, recurrence, overdue detection, escalation, reporting and email outbox delivery. Both share the same domain package and database adapter.
+Employees can filter all, active, overdue and completed cycles. Each row carries the task, occurrence, deadline, status and evidence. The completed `BLINF ReTAGG` row records `PORTALXEMPX1` and shows manager acknowledgement; the recurring inventory tasks are still scheduled.
 
-Firestore collections: users, userIds, managerEmployeeAssignments, tasks, taskCycles, completionSubmissions, auditLogs, reports, escalationEvents, notificationOutbox, automationState, automationRuns, appConfig. A task master stores recurrence and its generation cursor. Occurrence IDs are deterministic and preserve previous cycles. Calendar recurrence retains the original anchor and local wall-clock hour. Weekend shifting is configurable; daily business recurrence advances through working days.
+![Employee task workspace with completion evidence and scheduled recurring tasks](repo-media/Screenshot%202026-10-28%20at%202.33.23%E2%80%AFPM.png)
 
-Employees submit an external ticket or a daily completion note once. Server 2 validates required submitted fields and marks completion with the real employee and timestamp. Evidence is self-reported: no WhatsApp/portal API verification is claimed. Platform task IDs cannot be submitted as external ticket IDs. Late completion and manager acknowledgement remain separate.
+### Manager visibility and acknowledgement
 
-The first worker scan after deadline queues a manager alert. Missed acknowledgement escalates after 24 hours from actual provider acceptance. Unresolved work otherwise escalates at the third checkpoint, 24 hours apart. Leadership can configure these thresholds. Transactions, deterministic events, scan leases and a durable email outbox prevent routine duplicate work. Queueing is distinct from SENT. Delivery retries use exponential backoff and provider idempotency keys. Provider idempotency windows are finite; inspect ambiguous delivery failures before manual requeueing.
+The manager view adds the assigned employee and a task creation action. The same task and ticket reference appear here, allowing the manager to inspect evidence and acknowledge an issue while preserving who actually completed the work.
 
-## Local test adapter
+![Manager task cycles with assigned employee and acknowledgement status](repo-media/Screenshot%202026-10-28%20at%202.35.28%E2%80%AFPM.png)
 
-Set DATA_MODE=local only for isolated development/tests. It stores normalized collections in `.local/data.json`, shared by both processes using a filesystem transaction lock. Startup seeds four assigned employees and a fifth unassigned account. In this explicit mode only, `/api/demo-login` can select a test identity. Public production login remains Google-only, and production refuses the local adapter. Local notifications are marked LOCAL_PREVIEW and never sent. The default .env does not enable test identities.
+### Google Sheets output
 
-## Reporting and Google Sheets
+The `automate_AW` workbook presents Manager → Executive → Task Title with due date, status, required proof and ticket ID. Here, **Executive means Employee**. The `BLINF ReTAGG` / `PORTALXEMPX1` record matches the website screenshots, illustrating the relationship between the operational workspace and the reporting sheet.
 
-The web report follows manager → employee → occurrence and supports CSV export. The Apps Script integration mirrors immutable row IDs to five sheet tabs. Configure SHEETS_SYNC_TOKEN and a private bound script. Sheets is organization-wide reporting; employees submit completion through their scoped web dashboard. Do not expose sheet access to the whole workforce or share with external submission addresses without explicit authorization.
+![Google Sheets operational report showing the same tasks and external ticket reference](repo-media/Screenshot%202026-10-28%20at%202.36.26%E2%80%AFPM.png)
 
-## Deployment later
+*Screenshot values are historical demonstration data. Different display formats or values in separately captured screens should be checked against the source cycle ID and current Firestore record when reviewing a live case.*
 
-Build with `npm run build` and run Server 1 on a Node-capable host. Run Server 2 as a long-lived process or schedule `worker:once` independently. Store runtime secrets in the host's secret manager. Firebase Spark can supply Auth/Firestore within its quotas; dynamic Google Cloud hosting and scheduling require billing and are not enabled here. The owner requested no billing upgrade. No public deployment has occurred.
+## 👥 Roles and the daily operating process
 
-## Verification boundaries
+| Role | Main actions | Scope |
+| --- | --- | --- |
+| Employee | Read assigned tasks; submit evidence; view own reports and activity | Own tasks and history |
+| Manager | Assign eligible employees; create tasks; inspect evidence; acknowledge issues; review team reports | Assigned team |
+| Leadership | Inspect organization-wide reporting and escalations; configure SLA settings | Approved leadership accounts |
 
-Automated local domain tests cover recurrence, employee ownership, proof validation, concurrent completion, manager assignment, acknowledgement separation and escalation deduplication. Live Firebase authorization, Google login, email receipt, and Sheets execution require your credentials and must be checked after configuration. For larger organizations add bounded query pagination, transactional report updates on every acknowledgement, immutable audit retention and provider delivery webhooks before operational rollout.
+Selecting a role card does not grant leadership access. Leadership emails must be provisioned in the server allowlist. Existing accounts retain their registered role.
 
-## Server 2 JSON report API
+### Daily and portal task examples
 
-`GET http://127.0.0.1:3001/get-report` returns the current operational database report. It is independent of scheduled scans and does not change task state or send emails. Use `npm run worker` for both scheduled scans and reporting, or `npm run worker:report` for reporting only. In report-only mode scan controls reject requests.
+| Task | Frequency | Employee action | Recorded proof |
+| --- | --- | --- | --- |
+| Daily Operations Update | Each configured working day | Share the operational update, then record completion in the website | Completion note and optional proof link |
+| Portal Task A | Every 7 days | Complete the portal action and submit its external ticket reference | External Ticket ID |
+| Portal Task B | Every 15 days | Complete the portal action and submit its external ticket reference | External Ticket ID |
+| Portal Task C | Every 30 days | Complete the portal action and submit its external ticket reference | External Ticket ID |
 
-Send `Authorization: Bearer <REPORT_API_TOKEN>` from the external service. The token is configured in the root `.env`; keep it server-side. This token permits reading organization-wide report data and cannot trigger scans or advance the test clock. `WORKER_API_TOKEN` is intentionally not accepted at `/get-report`. Requests without a valid report token return 401; `?key=<REPORT_API_TOKEN>` is also accepted for direct browser access. Duplicate key parameters are rejected.
+An external ticket ID is distinct from the platform’s task ID. The present verification step validates submitted evidence fields; it does not independently log into the external portal or prove that a WhatsApp message was sent. Recurring cycles preserve past evidence and timestamps instead of overwriting yesterday’s work.
 
-Example for a shell where REPORT_API_TOKEN has already been loaded securely:
+## ⏱️ Overdue work, acknowledgement and escalation
+
+The worker scans every **five minutes by default** (`SCAN_INTERVAL_MS=300000`). Processing occurs on a scan after the relevant deadline or threshold, subject to worker availability.
+
+| Checkpoint | Default behavior |
+| --- | --- |
+| First scan after a missed deadline | Mark the open cycle overdue and prepare the manager notification event. |
+| Manager acknowledgement overdue | Prepare leadership escalation after **24 hours** without acknowledgement, measured from the applicable manager-alert timestamp. |
+| Underlying task remains unresolved | Advance checkpoints every **24 hours** and prepare leadership escalation at checkpoint **3**, roughly 48 hours after the first checkpoint under uninterrupted scanning. |
+| Employee completes late | Preserve late / post-escalation completion attribution; manager acknowledgement remains a separate action. |
+| Repeated scan or retry | Deterministic cycle/event IDs, transactions, scan leases and delivery idempotency reduce duplicate processing. |
+
+Leadership can configure the acknowledgement SLA, checkpoint interval and escalation threshold. Acknowledging a problem does not complete the employee’s task.
+
+> **Email behavior in this version:** `services/automation-worker/src/index.ts` explicitly forces `EMAIL_DELIVERY_ENABLED=false` and `EMAIL_DRY_RUN=true`, including one-shot runs. Firebase notification intents are recorded as `SUPPRESSED`; the runtime sends no new email. While disabled, acknowledgement timing uses notification preparation time for workflow demonstration. Actual delivery timestamps must come from genuine `SENT` events. Enabling real email requires a deliberate runtime change and provider validation; changing environment variables alone does not override the current code.
+
+## 📊 Apps Script, Gemini and Google Sheets
+
+The current AI-assisted reporting pipeline is maintained in the sibling **`AppsScript/`** project distributed with this workspace. It contains `Code.gs`, `Config.gs`, `Transport.gs`, `Gemini.gs`, `Schema.gs`, `Sheets.gs`, `appsscript.json` and its own README/tests. If publishing this web repository alone, distribute that companion project with the handover.
+
+There is also a simpler [legacy integration](integrations/google-apps-script/Code.gs) inside this repository. It reads Server 1’s `/api/sheets` with `SHEETS_SYNC_TOKEN`. **The Server 2 → Gemini pipeline uses `REPORT_API_TOKEN` instead. These are separate integrations and their settings should not be mixed.**
+
+### Workbook guide for HR
+
+| Tab | How HR or a manager uses it |
+| --- | --- |
+| **Reports** | Review Manager → Executive → task-cycle facts, remarks, tags and follow-up priorities. |
+| **Task Master** | Inspect assignments, recurrence, deadlines and evidence requirements. |
+| **Employee Pending Report** | Filter `Action Required` to see work requiring employee action. |
+| **Manager Monitoring** | Review overdue duration, manager acknowledgement and escalation. |
+| **Escalation History** | Inspect prepared, suppressed, failed or actually sent notification events. |
+| **Sync Log** | Confirm refresh results, timestamps and errors. |
+| **_Sync State** | Hidden synchronization fingerprints; maintained by the script. |
+
+
+### Install or hand over the Apps Script
+
+1. Open the target Google Sheet → **Extensions → Apps Script**.
+2. Copy all companion `.gs` files into one project and use its `appsscript.json` manifest.
+3. Run `setDefaultProperties` once, then fill **Project Settings → Script Properties**.
+4. Run `diagnoseConnections`, then `setup`; authorize the script and confirm a successful Sync Log entry. The connection check calls Gemini and consumes its quota.
+5. After schedule changes, run `installSchedule`. Use `syncOperations` for a manual refresh and `stopAutomaticSync` to remove the current user’s automatic triggers.
+
+| Script Property | Purpose |
+| --- | --- |
+| `SERVER_BASE_URL` | Final public HTTPS address of Server 2; the script appends `/get-report`. |
+| `REPORT_API_TOKEN` | Read-only report token configured on Server 2. |
+| `GEMINI_API_KEY` / `GEMINI_MODEL` | Authorized API key and an available model supporting structured output. |
+| `SPREADSHEET_ID` | Existing target workbook; may be initialized from the bound sheet or created for a standalone project. |
+| `TIMEZONE` | `Asia/Kolkata` by default. |
+| `SCHEDULE_KIND` / `SCHEDULE_EVERY` | For a five-minute sync: `MINUTES` / `5`. The companion defaults to `HOURS` / `1`. |
+| `AI_CUSTOM_INSTRUCTIONS` | Reporting preferences for summaries, remarks and follow-up. |
+
+Trigger timing is approximate. Worker scanning and sheet synchronization are independent schedules; allow for both before expecting a completion to appear in Sheets. Sheet refreshes are incremental, but a multi-tab run is not one atomic transaction; inspect partial failures in Sync Log.
+
+## 📝 The Node.js report editor
+
+Server 2 includes a browser-based review workspace at:
+
+```text
+https://YOUR-WORKER-HOST/report-editor
+```
+
+This is a **report editor served by Node.js**, not a visual workflow automation builder. HR can search task reports, add notes, apply custom tags, and mark reviews `UNREVIEWED`, `IN_REVIEW`, `REVIEWED` or `NEEDS_ACTION`.
+
+| Access | Credential | Capability |
+| --- | --- | --- |
+| Read only | `REPORT_API_TOKEN` | View organization-wide reports |
+| Review editing | `REPORT_WRITE_TOKEN` | Read reports and edit allowed annotations |
+| Automation controls | `WORKER_API_TOKEN` | Worker controls; does not substitute for a report token |
+
+Enter the token in the editor rather than publishing it in a URL. Tokens stay with authorized reviewers and service integrations.
+
+The editor supports autosave, explicit save, revision checks and audit history. Server-sent events on `/report-events` notify it when data changes. Its annotation edits update the source cycle and derived report transactionally, so a later sheet sync can reflect those changes. Review status is independent of manager acknowledgement. The editor cannot forge completion evidence, alter deadlines or mark an email sent.
+
+For integrations, `GET /get-report?limit=100` returns schema metadata, generation time, pagination and allowlisted collections. Follow `pagination.nextCursor` until `hasMore` is false. Reads are live rather than a cross-collection snapshot.
 
 ```sh
+# Load REPORT_API_TOKEN securely in your shell before running.
 curl --fail --silent --show-error \
   -H "Authorization: Bearer $REPORT_API_TOKEN" \
-  'http://127.0.0.1:3001/get-report?limit=100'
+  'https://YOUR-WORKER-HOST/get-report?limit=100'
 ```
 
-The response has `schemaVersion`, generation timestamps, `pageCounts`, `pagination`, and `data`. Data contains allowlisted fields from `users`, `tasks`, `taskCycles`, `completionSubmissions`, `escalationEvents`, `reports`, and `auditLogs`. Internal IDs preserve relationships. Credentials, authentication tokens, profile email fields, recipient fields, proof links, private configuration and email bodies are not exported. User-authored task descriptions, evidence and remarks remain untrusted data for downstream AI processing.
 
-`limit` defaults to 100 records **per collection**, with a maximum of 500. If `pagination.hasMore` is true, fetch `/get-report?limit=100&cursor=<URL-encoded nextCursor>` until `nextCursor` is null. Completed collections return empty arrays on later pages. Merge records by collection and ID. `pageCounts` describes the current page, not global totals. Reads are live, not an atomic cross-collection snapshot; records may change while paginating. Do not treat this endpoint as a transactional backup.
+## 🛠️ Run and maintain the project
 
-Responses use `Cache-Control: no-store`. Database failures return 503 without leaking internal errors. Export scope is fixed, not an arbitrary collection browser.
+### Local development
 
-The worker binds to `127.0.0.1` by default. A remote AI/automation service cannot reach your computer's localhost. For remote access deploy Server 2 behind HTTPS with `WORKER_HOST=0.0.0.0`, or use an authenticated HTTPS tunnel. Configure the external service with that HTTPS base URL and the report token. No public hosting, tunnel, external-service connection, or outbound data transmission is created by this endpoint setup. Server-to-server requests need no CORS allowance; do not put the organization-wide token into browser code.
+Requires Node.js 22 or newer. From `workforce-automation/`:
 
-Browser access: `http://127.0.0.1:3001/get-report?key=YOUR_REPORT_API_TOKEN`. Add `&limit=100` and `&cursor=...` as needed. Query tokens can appear in browser history and upstream URL logs; use Authorization headers for service integrations. Responses set Referrer-Policy: no-referrer and never include the key in JSON.
-
-## Live report editing and synchronization
-
-Open `http://127.0.0.1:3001/report-editor` and enter `REPORT_WRITE_TOKEN` from `.env` to edit; `REPORT_API_TOKEN` gives read-only viewing. The page supports autosave, explicit save, task search, review states, custom tags, mail markings, and audit history. It subscribes to `/report-events` for live database change notifications rather than continuously polling all records. Unsaved drafts are not replaced by incoming data. The editor removes a query key from its address bar after connecting; use the token input on a reload.
-
-`GET /report-events?key=<read-or-write-token>` is a server-sent event stream. `report-changed` means the client should reload `/get-report`; `sync-error` indicates a database subscription problem. It sends no raw records or secrets. Streams send heartbeats, reconnect after interruption and rotate after ten minutes. Up to sixteen streams can be active per worker process.
-
-### Edit contract for external services
-
-`PATCH /reports/{cycleId}` accepts only `REPORT_WRITE_TOKEN`, via Authorization header or the `key` query parameter. A write token also grants report reads, but a read token cannot edit or control the worker. Only these annotations can be edited: `reportNote`, `reviewStatus` (UNREVIEWED, IN_REVIEW, REVIEWED, NEEDS_ACTION), and `customTags`. This analyst review state is independent of manager acknowledgement. Completion actors, evidence, deadlines, delivery history and task lifecycle status cannot be forged through the report editing endpoint.
-
-```json
-{
-  "requestId": "unique-request-id-0001",
-  "expectedRevision": 0,
-  "changes": {
-    "reportNote": "Follow up on the portal evidence",
-    "reviewStatus": "NEEDS_ACTION",
-    "customTags": ["follow-up", "portal"]
-  }
-}
+```sh
+npm ci --include=dev
+cp .env.example .env
+# Fill in Firebase, URLs and tokens before starting.
+npm run dev
 ```
 
-Use the source cycle's `reportRevision`, or zero for an unedited cycle. Each accepted edit transaction updates the source `taskCycles` record and its derived `reports` record, increments the revision and appends a `REPORT_EDITED` audit event including before/after values and the server-configured integration actor. `REPORT_EDITOR_ID` identifies the integration; the client cannot impersonate an employee or manager. A stale revision returns 409 and preserves the current data. Reload and reconcile before retrying. Repeat an identical request with the same requestId after a network failure to retrieve the original result safely; reusing it with different content is rejected. Deduplication receipts are stored in private `reportMutations` documents, which are not exported.
+In another terminal:
 
-Task creation, employee evidence submission, and manager acknowledgement now update their derived reports in the same transaction. Worker scans preserve report annotations and rebuild operational markings. Reports include `mailHistory`, `mailTags`, `markings`, and revision metadata. API schema version is 1.1; existing collection arrays and pagination remain available.
+```sh
+npm run worker
+```
 
-### Mailing explicitly disabled
+Website: `http://127.0.0.1:3000` · Worker: `http://127.0.0.1:3001` · Editor: `http://127.0.0.1:3001/report-editor`.
 
-Server 2 forces `EMAIL_DELIVERY_ENABLED=false` and `EMAIL_DRY_RUN=true` before running. No Resend send call is made by this runtime, including `worker:once`. It still computes overdue/checkpoint/SLA behavior, records notification intents and maintains the audit trail. New Firebase notification intents are `SUPPRESSED`, with no sent timestamp. Disabled-mail acknowledgement timing uses notification preparation time for workflow testing; it does not assert manager receipt. Leadership escalation preparation is tracked separately from actual delivery.
+`npm run worker:once` performs a single scan and exits. `npm run worker:report` serves reports without scheduled scans. Explicit `DATA_MODE=local` is available for isolated development; production uses Firebase and rejects the local adapter. Local test identities are not production accounts.
 
-Examples of accurate report labels:
+### Verification and troubleshooting
 
-- `Pending mail to Rahul Mehta — mailing disabled`
-- `Mail preview for Rahul Mehta — not sent`
-- `Mail failed for Rahul Mehta`
-- `Mailed Rahul Mehta` — only if a historical delivery event is actually SENT
+```sh
+npm run check:config
+npm run typecheck
+npm test
+npm run build
+```
 
-No report editor or write request can mark an email as sent. Suppressed intents are not eligible for automatic delivery. Re-enabling real mailing is a separate future implementation/configuration change.
+For the companion sync, from the parent workspace directory:
 
-Run `npm run worker` to keep the five-minute scan loop, reporting, editing and live synchronization available. `npm run worker:report` retains a read/edit server without scheduled scans. The current setup does not create an unattended operating-system startup job or public hosting; the worker process and computer must remain running.
-# automate_AW
+```sh
+node --test AppsScript/tests/sync.test.mjs
+```
+
+Automated tests validate local rules and mocked integrations. Live Google OAuth, Firebase permissions, Gemini access and Sheets execution require their deployed credentials; the project owner reports the deployed pipeline working.
+
+| Symptom | Check |
+| --- | --- |
+| Google login configuration error | `/api/firebase-config`; four public Firebase runtime variables in the active deployment. |
+| `/api/login` returns 403 Permission denied | `APP_BASE_URL` matches the origin used in the browser; deploy the current origin-validation code. |
+| Worker offline indicator | Worker `/health`, public `WORKER_URL`, process availability and network response time. |
+| Report request returns 401 | Use the read or write report token, not the worker control token. |
+| Sheet appears stale | Apps Script Executions, Sync Log, schedule, pagination, Gemini access and quota. |
+| Sheet edits disappear | Managed columns mirror the server; use Manual Notes or authorized report annotations. |
+| No email arrives | Current worker explicitly disables delivery; inspect suppression state rather than assuming a mail was sent. |
+
+## 💬 Next development cycle: WhatsApp-assisted completion
+
+Some employees perform daily work in WhatsApp groups. A proposed next cycle will evaluate [whatsapp-web.js](https://wwebjs.dev/), a Node.js library that connects through WhatsApp Web, to reduce manual proof entry. **This integration is planned and is not part of the current login or completion flow.** Google remains the website’s authentication method.
+
+The proposed flow is:
+
+```mermaid
+flowchart LR
+    A[Employee opts in and links WhatsApp with QR] --> B[Dedicated Node.js connector]
+    B --> C[Observe explicitly approved group and task evidence]
+    C --> D[Match sender, message ID, time and task cycle]
+    D --> E[Submit evidence through shared backend validation]
+    E --> F[Worker processes completion and updates reports]
+```
+
+The design should map an authenticated employee to an opted-in WhatsApp session, restrict processing to approved groups, and use message IDs to prevent duplicate evidence. Unmatched or ambiguous messages should require review, with the current website submission retained as a fallback.
+
+This requires a separate persistent Node.js/browser process, secure session storage, reconnect handling, session revocation and explicit consent for any message processing. Session credentials must never enter Sheets or the public repository. `whatsapp-web.js` is a third-party WhatsApp Web integration, so account reliability and applicable platform terms need assessment before rollout. It must not be described as an official WhatsApp API or a production feature already delivered. See its [authentication guidance](https://wwebjs.dev/guide/creating-your-bot/authentication.html).
+
+Acceptance criteria for that cycle: employee-controlled linking and unlinking; correct task-cycle matching; no duplicate completion on reconnect; an auditable evidence reference; and no collection of unrelated conversations.
+
+<div align="center">
+  <p><strong>Allo Innoware · Operations accountability from assignment to reporting</strong></p>
+  <p><a href="https://automate-aw-five.vercel.app">Open the platform</a> · <a href="https://alloinnoware.com/">Company website</a></p>
+</div>

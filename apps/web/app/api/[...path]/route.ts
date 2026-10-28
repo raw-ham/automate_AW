@@ -1,3 +1,4 @@
+import {isAllowedRequestOrigin} from '../../../lib/request-origin';
 import {NextResponse} from 'next/server';import {cookies} from 'next/headers';import {getAuth} from 'firebase-admin/auth';import {z} from 'zod';import {timingSafeEqual} from 'node:crypto';
 import {isLocal,firebaseDb,createTask,submit,acknowledge,assignEmployee,userIdSchema,clock} from '@allo/core';
 import {db,initialize,identity,profile,requireProfile,snapshot} from '../../../lib/server';
@@ -8,7 +9,7 @@ export async function GET(request:Request,{params}:{params:Promise<{path:string[
  if(route==='sheets'){const expected=process.env.SHEETS_SYNC_TOKEN||'',token=request.headers.get('authorization')?.replace(/^Bearer /,'')||'';if(!expected||Buffer.byteLength(expected)!==Buffer.byteLength(token)||!timingSafeEqual(Buffer.from(expected),Buffer.from(token)))return NextResponse.json({error:'Unauthorized'},{status:401});const url=new URL(request.url),collection=url.searchParams.get('collection')||'reports';if(!['tasks','taskCycles','reports','escalationEvents'].includes(collection))throw new Error('Invalid collection');const rows=await db.list(collection);return NextResponse.json({rows});}
  return NextResponse.json({error:'Not found'},{status:404});}catch(e){return error(e)}}
 export async function POST(request:Request,{params}:{params:Promise<{path:string[]}>}){try{
- const origin=request.headers.get('origin');if(origin&&origin!==new URL(request.url).origin&&origin!==process.env.APP_BASE_URL)throw new Error('Permission denied');await initialize();const route=(await params).path.join('/'),body=await request.json().catch(()=>({}));
+ if(!isAllowedRequestOrigin(request))throw new Error('Permission denied');await initialize();const route=(await params).path.join('/'),body=await request.json().catch(()=>({}));
  if(route==='demo-login'){if(!isLocal())throw new Error('Permission denied');const uid=z.enum(['manager','leadership','employee-1','employee-2','employee-3','employee-4','employee-5']).parse(body.uid);const r=NextResponse.json({ok:true});r.cookies.set('allo_session',uid,options);return r;}
  if(route==='logout'){const r=NextResponse.json({ok:true});r.cookies.set('allo_session','',{...options,maxAge:0});return r;}
  if(route==='login'){if(isLocal())throw new Error('Use the local preview account selector');firebaseDb();const idToken=z.string().min(10).parse(body.idToken),d=await getAuth().verifyIdToken(idToken);if(d.firebase.sign_in_provider!=='google.com'||!d.email_verified||Date.now()/1000-d.auth_time>300)throw new Error('Sign in with a verified Google account');const session=await getAuth().createSessionCookie(idToken,{expiresIn:options.maxAge*1000});const r=NextResponse.json({ok:true});r.cookies.set('allo_session',session,options);return r;}
